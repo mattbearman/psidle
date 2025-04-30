@@ -67,8 +67,6 @@ proc getans:
 
 	ioopen(file%, "\psidle\answers.txt", $0220)
 
-	day% = 9
-
 	rem read words until the required day's word is found
 	do
 		rem + 1 to addr to keep leading byte for length
