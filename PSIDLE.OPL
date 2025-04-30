@@ -1,0 +1,529 @@
+rem app Psidle
+	rem type $1000
+	rem path "\psidle"
+rem enda
+
+proc main:
+	global boxsize%, boxgap%, answer$(5), debug%
+	global guesses$(6, 5), guessno%, guesdat$(6, 5), guessch%
+	global keys$(3, 10), keystat$(3, 10)
+
+	boxsize% = 21
+	boxgap% = 5
+	guessno% = 1
+	guessch% = 1
+	debug% = 0
+
+	rem enable grey plane
+	defaultwin 1
+
+	setup:
+
+	if debug% = 0
+		rem screen will be manually updated in the draw proc
+		gupdate off
+	endif
+	
+	while 1
+		getguess:
+	endwh
+endp
+
+proc setup:
+	local rownum%
+
+	getans:
+	load:
+	
+	rownum% = 1
+
+	while rownum% <= 6
+		guesdat$(rownum%) = "     "
+		guesses$(rownum%) = "     "
+
+		rownum% = rownum% + 1
+	endwh
+
+	drawbg:
+
+	gat 300, 50
+	gfont 12
+	gstyle 8
+	gprint "Psidle"
+	gfont 11
+	gstyle 0
+
+	drawkeys:
+endp
+
+proc getans:
+	local file%, day%, word$(5), wordadd%, len%
+	
+	rem wordle started (day 0) on 19/6/21
+	day% = days(day, month, year) - days(19, 6, 2021)
+	log:(gen$(day%, 5))
+	
+	wordadd% = addr(word$)
+
+	ioopen(file%, "\psidle\answers.txt", $0220)
+
+	day% = 9
+
+	rem read words until the required day's word is found
+	do
+		rem + 1 to addr to keep leading byte for length
+		len% = ioread(file%, wordadd% + 1, 5)
+
+		day% = day% - 1
+	until day% = 0
+
+	rem set the string lengh in leading byte
+	pokeb wordadd%, len%
+
+	ioclose(file%)
+
+	answer$ = word$
+
+	log:("Answer: " + answer$)
+endp
+
+proc load:
+	rem open "\psidle\answers.dbf", a, answer$
+
+	rem position [int] will load that record
+
+	rem print count
+
+	rem number of fdays since 1900-1-1
+	rem days(day, month, year)
+endp
+
+proc check:
+	local charnum%, guess$(5), gdat$(5), canfind$(5), foundat%
+	
+	charnum% = 1
+	guess$ = guesses$(guessno%)
+	gdat$ = "NNNNN"
+	
+	if indic%:(guess$) = 0
+		giprint "Not in word list", 1
+		return
+	endif
+
+	canfind$ = answer$
+
+	while charnum% <= 5
+		if charat$:(guess$, charnum%) = charat$:(answer$, charnum%)
+			gdat$ = swapch$:(gdat$, charnum%, "Y")
+			
+			rem this char is found and cant be found again
+			rem so remove it from can find
+			canfind$ = swapch$:(canfind$, charnum%, " ")
+		endif
+		
+		charnum% = charnum% + 1
+	endwh
+	
+	log:(canfind$)
+
+	charnum% = 1
+
+	while charnum% <= 5
+		rem dont check if its already correct
+		if charat$:(gdat$, charnum%) = "N"
+			foundat% = loc(canfind$, charat$:(guess$, charnum%))
+			
+			if foundat% > 0
+				gdat$ = swapch$:(gdat$, charnum%, "M")
+				rem canfind$ = swapch$:(canfind$, foundat%, " ")
+			endif
+		endif
+		
+		charnum% = charnum% + 1
+	endwh
+
+	log:(canfind$)
+
+	guesdat$(guessno%) = gdat$
+		
+	log:(gdat$)
+	
+	mark:
+	
+	guessno% = guessno% + 1
+	guessch% = 1
+endp
+
+proc indic%:(guess$)
+	local first$(1), file%, word$(5), wordadd%, len%
+
+	rem try answers file first
+	if infile%:("\psidle\answers.txt", guess$)
+		return 1
+	else
+		first$ = lower$(charat$:(guess$, 1))
+		return infile%:("\psidle\words\" + first$ + ".txt", guess$)
+	endif
+
+	rem local first$(1), file%, word$(5), wordadd%, len%
+
+	first$ = lower$(charat$:(guess$, 1))
+
+	wordadd% = addr(word$)
+
+	log:("\psidle\words\" + first$ + ".txt")
+
+	ioopen(file%, "\psidle\words\" + first$ + ".txt", $0220)
+
+	rem read words until the guess is found
+	while 1
+		rem + 1 to addr to keep leading byte for length
+		len% = ioread(file%, wordadd% + 1, 5)
+
+		if len% < 5
+			rem end of file
+			ioclose(file%)
+			return 0
+		endif
+
+		rem set the string lengh in leading byte
+		pokeb wordadd%, len%
+
+		log:(upper$(word$) + " = " + guess$)
+		if upper$(word$) = guess$
+			ioclose(file%)
+			return 1
+		endif
+	endwh
+endp
+
+proc infile%:(file$, guess$)
+	local file%, word$(5), wordadd%, len%
+
+	log:("Checking " + file$ + " for " + guess$)
+
+	wordadd% = addr(word$)
+
+	ioopen(file%, file$, $0220)
+
+	rem read words until the guess is found
+	while 1
+		rem + 1 to addr to keep leading byte for length
+		len% = ioread(file%, wordadd% + 1, 5)
+
+		if len% < 5
+			rem end of file
+			ioclose(file%)
+			return 0
+		endif
+
+		rem set the string lengh in leading byte
+		pokeb wordadd%, len%
+
+		if upper$(word$) = guess$
+			ioclose(file%)
+			return 1
+		endif
+	endwh
+endp
+
+proc mark:
+	local charnum%, guess$(5), gdat$(5), char$(1), letter$(1)
+	
+	charnum% = 1
+	guess$ = guesses$(guessno%)
+	gdat$ = guesdat$(guessno%)
+
+	while charnum% <= 5
+		char$ = charat$:(gdat$, charnum%)
+		letter$ = charat$:(guess$, charnum%)
+
+		boxpos:(guessno%, charnum%)
+
+		rem set text to black
+		gtmode 0
+
+		if char$ = "N"
+			clearbox:
+			
+			ggrey 1
+			letter:(letter$)
+			ggrey 0
+		elseif char$ = "Y"
+			blackbox:
+			
+			rem set text to white
+			gtmode 1
+			letter:(letter$)
+
+		elseif char$ = "M"
+			graybox:
+		endif
+		
+		charnum% = charnum% + 1
+
+		gupdate
+
+		if charnum% <= 5
+			pause 6
+		endif
+	endwh
+
+	charnum% = 1
+	while charnum% <= 5
+		char$ = charat$:(gdat$, charnum%)
+		letter$ = charat$:(guess$, charnum%)
+
+		updkey:(letter$, char$)
+
+		charnum% = charnum% + 1
+	endwh
+
+	gupdate
+
+	if guess$ = answer$
+		pause 20
+		alert("You Win!", "", "Exit")
+		stop
+	elseif guessno% = 6
+		pause 20
+		alert("You Lose", "The word was " + answer$, "Exit")
+		stop
+	endif
+endp
+
+proc drawbg:
+	local rownum%, colnum%
+	
+	rownum% = 1
+
+	while rownum% <= 6
+		colnum% = 1
+	
+		while colnum% <= 5
+			boxpos:(rownum%, colnum%)
+			blankbox:
+
+			colnum% = colnum% + 1
+		endwh
+
+		rownum% = rownum% + 1
+	endwh
+
+	gupdate
+endp
+
+proc drawkeys:
+	local rownum%, keynum%
+
+	keys$(1) = "QWERTYUIOP"
+	keys$(2) = "ASDFGHJKL"
+	keys$(3) = "ZXCVBNM"
+
+	keystat$(1) = "          "
+	keystat$(2) = "          "
+	keystat$(3) = "          "
+
+	do
+		rownum% = rownum% + 1
+		keynum% = 1
+
+		do
+			keypos:(rownum%, keynum%)
+
+			gbox boxsize%, boxsize%
+
+			drawkey:(charat$:(keys$(rownum%), keynum%))
+
+			keynum% = keynum% + 1
+		until keynum% > len(keys$(rownum%))
+	until rownum% = 3
+endp
+
+proc keypos:(row%, col%)
+	local keysp%, x%, y%
+	
+	keysp% = boxsize% + 2
+	x% = 180 + (col% * keysp%) + (row% * 11)
+	y% = 50 + (row% * keysp%)
+	
+	if debug%
+		x% = x% + 38
+	endif
+	
+	gat x%, y%
+endp
+
+proc updkey:(letter$, style$)
+	local rownum%, keynum%, row$(10), found%
+
+	rem set dark text
+	gtmode 0
+
+	rem find the row and col for this key
+	do
+		rownum% = rownum% + 1
+		keynum% = 1
+
+		row$ = keys$(rownum%)
+
+		do
+			if charat$:(row$, keynum%) = letter$
+				rem exit the outer loop
+				found% = 1
+
+				break
+			endif
+
+			keynum% = keynum% + 1
+		until keynum% > len(keys$(rownum%))
+	until rownum% = 3 or found%
+	
+	keypos:(rownum%, keynum%)
+	
+	if style$ = "N"
+		rem cant use clearbox as it only clears the bg
+		gfill boxsize%, boxsize%, 1
+
+		ggrey 1
+		gbox 20, 20
+		drawkey:(letter$)
+		ggrey 0
+
+	elseif style$ = "Y"
+		blackbox:
+
+		rem clear text
+		gtmode 1
+
+		drawkey:(letter$)
+
+	rem only render a maybe if this letter doesnt already
+	rem have a Y or N
+	elseif style$ = "M" and charat$:(keystat$(rownum%), keynum%) = " "
+		graybox:
+		
+		drawkey:(letter$)
+	endif
+
+	keystat$(rownum%) = swapch$:(keystat$(rownum%), keynum%, style$)
+endp
+
+proc drawkey:(letter$)
+	gmove 5, 16
+	gstyle 16
+	gprint letter$
+endp
+
+proc blankbox:
+	gbox boxsize%, boxsize%
+endp
+
+proc blackbox:
+	gmove 1, 1
+	gfill boxsize% - 2, boxsize% - 2, 0
+	gmove -1, -1
+endp
+
+proc graybox:
+	ggrey 1
+	gmove 1, 1
+	gfill boxsize% - 2, boxsize% - 2, 0
+	gmove -1, -1
+	ggrey 0
+endp
+
+proc clearbox:
+	gmove 1, 1
+	gfill boxsize% - 2, boxsize% - 2, 1
+	gmove -1, -1
+endp
+
+proc letter:(l$)
+	rem double height
+	gstyle 16
+	
+	gmove 6, 16
+	gprint l$
+	gmove -6, -16
+endp
+
+proc boxpos:(row%, col%)
+	local xpos%, ypos%
+	
+	xpos% = (boxgap% + boxsize%) * (col% - 1) + boxgap% + 30
+	ypos% = (boxgap% + boxsize%) * (row% - 1) + boxgap%
+	
+	if debug%
+		xpos% = xpos% + 90
+	endif
+	
+	gat xpos%, ypos%
+endp
+
+proc charat$:(string$, at%)
+	local char$(1)
+
+	char$ = mid$(string$, at%, 1)
+
+	return char$
+endp
+
+proc swapch$:(string$, at%, newch$)
+	local l$(255), r$(255)
+	
+	l$ = left$(string$, at% - 1)
+	r$ = right$(string$, len(string$) - at%)
+	
+	return l$ + newch$ + r$
+endp
+
+proc getguess:
+	local char%, char$(1), guess$(5), gueslen%
+	
+	char% = get
+	char$ = upper$(chr$(char%))
+	
+	guess$ = guesses$(guessno%)
+	gueslen% = len(guess$)
+
+	rem backspace key
+	if char% = 8 and guessch% > 1
+		guessch% = guessch% - 1
+		guess$ = swapch$:(guess$, guessch%, " ")
+	
+		boxpos:(guessno%, guessch%)
+
+		gtmode 3
+		letter:(" ")
+
+	rem enter key
+	elseif char% = 13 and guessch% > 5
+		check:
+		return
+
+	elseif guessch% <= 5
+		rem upper is 65-90 inc, lowe is 97-122 inc
+		if (char% >= 65 and char% <= 90) or (char% >= 97 and char% <= 122)
+			guess$ = swapch$:(guess$, guessch%, char$)
+	
+			boxpos:(guessno%, guessch%)
+
+			gtmode 3
+			letter:(char$)
+	
+			guessch% = guessch% + 1
+		endif
+	endif
+	
+	guesses$(guessno%) = guess$
+
+	gupdate
+endp
+
+proc log:(message$)
+	if debug%
+		print message$
+	endif
+endp
+
