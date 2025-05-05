@@ -1,7 +1,6 @@
-rem app Psidle
-	rem type $1000
-	rem path "\psidle"
-rem enda
+app Psidle
+	type $1000
+enda
 
 proc main:
 	global boxsize%, boxgap%, answer$(5), debug%
@@ -32,6 +31,10 @@ endp
 proc setup:
 	local rownum%
 
+	rem open answers and keep it open
+	rem as it will be used frequently
+	open "\psidle\answers", A, ans$
+
 	getans:
 	load:
 	
@@ -57,32 +60,14 @@ proc setup:
 endp
 
 proc getans:
-	local file%, day%, word$(5), wordadd%, len%
+	local day%
 	
 	rem wordle started (day 0) on 19/6/21
 	day% = days(day, month, year) - days(19, 6, 2021)
 	log:(gen$(day%, 5))
-	
-	wordadd% = addr(word$)
 
-	ioopen(file%, "\psidle\answers.txt", $0220)
-
-	rem read words until the required day's word is found
-	do
-		rem + 1 to addr to keep leading byte for length
-		len% = ioread(file%, wordadd% + 1, 5)
-
-		day% = day% - 1
-	until day% = 0
-
-	rem set the string lengh in leading byte
-	pokeb wordadd%, len%
-
-	ioclose(file%)
-
-	answer$ = word$
-
-	log:("Answer: " + answer$)
+	position day%
+	answer$ = A.ans$
 endp
 
 proc load:
@@ -153,76 +138,35 @@ proc check:
 endp
 
 proc indic%:(guess$)
-	local first$(1), file%, word$(5), wordadd%, len%
+	local first$(1), found%
 
-	rem try answers file first
-	if infile%:("\psidle\answers.txt", guess$)
+	busy "Checking..."
+
+	rem check answers db first
+	rem rewind to beginning otherwise only first search works
+	first
+	if find(guess$)
+		log:("guess found in answers db")
+
+		busy off
 		return 1
-	else
-		first$ = lower$(charat$:(guess$, 1))
-		return infile%:("\psidle\words\" + first$ + ".txt", guess$)
 	endif
 
-	rem local first$(1), file%, word$(5), wordadd%, len%
-
+	rem check all allowed words with the same first letter as guess
 	first$ = lower$(charat$:(guess$, 1))
 
-	wordadd% = addr(word$)
+	open "\psidle\words\" + first$, B, wrd$
 
-	log:("\psidle\words\" + first$ + ".txt")
+	if find(guess$)
+		log:("guess found in words\" + first$ + " db")
 
-	ioopen(file%, "\psidle\words\" + first$ + ".txt", $0220)
+		found% = 1
+	endif
+	
+	close
 
-	rem read words until the guess is found
-	while 1
-		rem + 1 to addr to keep leading byte for length
-		len% = ioread(file%, wordadd% + 1, 5)
-
-		if len% < 5
-			rem end of file
-			ioclose(file%)
-			return 0
-		endif
-
-		rem set the string lengh in leading byte
-		pokeb wordadd%, len%
-
-		log:(upper$(word$) + " = " + guess$)
-		if upper$(word$) = guess$
-			ioclose(file%)
-			return 1
-		endif
-	endwh
-endp
-
-proc infile%:(file$, guess$)
-	local file%, word$(5), wordadd%, len%
-
-	log:("Checking " + file$ + " for " + guess$)
-
-	wordadd% = addr(word$)
-
-	ioopen(file%, file$, $0220)
-
-	rem read words until the guess is found
-	while 1
-		rem + 1 to addr to keep leading byte for length
-		len% = ioread(file%, wordadd% + 1, 5)
-
-		if len% < 5
-			rem end of file
-			ioclose(file%)
-			return 0
-		endif
-
-		rem set the string lengh in leading byte
-		pokeb wordadd%, len%
-
-		if upper$(word$) = guess$
-			ioclose(file%)
-			return 1
-		endif
-	endwh
+	busy off
+	return found%
 endp
 
 proc mark:
@@ -281,7 +225,7 @@ proc mark:
 
 	if guess$ = answer$
 		pause 20
-		alert("You Win!", "", "Exit")
+		alert("You Win!", "You guessed " + answer$ + " in " + gen$(guessno%, 1) + " guesses", "Exit")
 		stop
 	elseif guessno% = 6
 		pause 20
@@ -460,11 +404,7 @@ proc boxpos:(row%, col%)
 endp
 
 proc charat$:(string$, at%)
-	local char$(1)
-
-	char$ = mid$(string$, at%, 1)
-
-	return char$
+	return mid$(string$, at%, 1)
 endp
 
 proc swapch$:(string$, at%, newch$)
@@ -524,4 +464,3 @@ proc log:(message$)
 		print message$
 	endif
 endp
-
